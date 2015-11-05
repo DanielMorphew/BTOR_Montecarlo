@@ -29,6 +29,9 @@
       DOUBLE PRECISION :: VLM, W, PRS, SUMPRS, AVPRS, PRSFIX, PET
       DOUBLE PRECISION :: PE, PEPP, SUMPE, AVPE, PEEND, QI(4), RM(3,3)
       DOUBLE PRECISION :: SUMVLM, SUMDNS, AVVLM, AVDNS, DNS, RACCPC
+      INTEGER          :: TIME1, TIME2, COUNTTIME
+
+      CALL SYSTEM_CLOCK(TIME1)
 
       OPEN (UNIT = 1, FILE = 'parameter_mc.inp', STATUS = 'UNKNOWN')
 
@@ -65,7 +68,7 @@
       ALLOCATE(MCO(MAXK,NTSITE/2), MSO(MAXK,NTSITE/2))
 
       DPMUSQ = DPMU*DPMU
-      VLM    = DFLOAT(NPART)*PI*(1.D0**3.D0)/(6.D0*PHI)
+      VLM    = DFLOAT(NPART)*PI*(3.D0)/(6.D0*PHI)
       BOXL   = VLM ** (1.D0/3.D0)
 !      MAXDRT = MAXDRT*PI/180.D0
       INVRPI = 1.D0/SQRT(PI)
@@ -171,20 +174,22 @@
             SUMVLM = 0.D0
             SUMDNS = 0.D0
          ENDIF  
+       
+            IF (MOD(ISTEP, IDUMP3) == 0) THEN
+                RACCPC = DFLOAT(ACCPTC)/DFLOAT(IDUMP3*NPART)
+                IF (RACCPC < 0.45D0) THEN
+                   MAXDTR = MAXDTR * 0.975D0
+                   MAXDRT = MAXDRT * 0.975D0
+                ELSE 
+                   IF (MAXDRT < 0.5D0) THEN
+                      MAXDTR = MAXDTR * 1.025D0
+                      MAXDRT = MAXDRT * 1.025D0
+                   ENDIF
+                ENDIF  
+                WRITE (MYUNIT, *) RACCPC, MAXDTR, MAXDRT
+                ACCPTC = 0
+            ENDIF          
 
-         IF (MOD(ISTEP, IDUMP3) == 0) THEN
-            RACCPC = DFLOAT(ACCPTC)/DFLOAT(IDUMP3*NPART)
-            IF (RACCPC < 0.45D0) THEN
-               MAXDTR = MAXDTR * 0.975D0
-               MAXDRT = MAXDRT * 0.975D0
-            ELSE
-               MAXDTR = MAXDTR * 1.025D0
-               MAXDRT = MAXDRT * 1.025D0
-            ENDIF  
-            WRITE (MYUNIT, *) RACCPC, MAXDTR, MAXDRT
-            ACCPTC = 0
-         ENDIF          
-            
       ENDDO
 
       CALL ENRG (PEEND)
@@ -206,7 +211,12 @@
 
 !      WRITE(MYUNIT, *) 'Number of successful quenches = ', QCOUNT
       CLOSE(MYUNIT)
- 
+
+      OPEN (UNIT = 144, FILE = 'time.dat', STATUS = 'UNKNOWN')
+      CALL SYSTEM_CLOCK(TIME2, COUNTTIME)
+      WRITE (144,*) REAL(TIME2-TIME1)/REAL(COUNTTIME)
+      CLOSE (UNIT =144)
+
       STOP  
       END PROGRAM SHIFTDP_MC_NVT
 
@@ -219,9 +229,9 @@
       IMPLICIT NONE
      
 
-      INTEGER          :: J, J1, J2, INDXP, ACCPTC
+      INTEGER          :: J, J1, J2, J3, INDXP, ACCPTC
       DOUBLE PRECISION :: RO(3), QO(4), QN(4), RSO(NRBSITE,3), RM(3,3), EO(NRBSITE,3)
-      DOUBLE PRECISION :: PE, DELE, ENRGO, ENRGN, DPEKS, MC(MAXK), MS(MAXK), SUMC(MAXK), SUMS(MAXK) 
+      DOUBLE PRECISION :: PE, DELE, ENRGO, ENRGN, DPEKS, MC(MAXK,(NRBSITE/2)), MS(MAXK,(NRBSITE/2)), SUMC(MAXK), SUMS(MAXK) 
       DOUBLE PRECISION :: RANF, DUMMY, BLTZMN, rand   
       LOGICAL          :: INSIDET, PERCT, REJECTT
 
@@ -267,8 +277,9 @@
 
          DO J1 = NRBSITE/2+1, NRBSITE
             J2 = (INDXP-1)*3 + (J1-NRBSITE/2)
-            MC(1:MAXK) = MCO(1:MAXK,J2)
-            MS(1:MAXK) = MSO(1:MAXK,J2)
+            J3 = J1 - (NRBSITE/2)
+            MC(1:MAXK,J3) = MCO(1:MAXK,J2)
+            MS(1:MAXK,J3) = MSO(1:MAXK,J2)
          ENDDO
 
          CALL SNENRG_DIPOLE_FOURIERSPACE(INDXP,DPEKS,MC,MS,SUMC,SUMS)
@@ -292,8 +303,9 @@
               ACCPTC = ACCPTC + 1
               DO J1 = NRBSITE/2+1, NRBSITE
                  J2 = (INDXP-1)*3 + (J1-NRBSITE/2)
-                 MCO(1:MAXK,J2) = MC(1:MAXK)
-                 MSO(1:MAXK,J2) = MS(1:MAXK)
+                 J3 = J1 - (NRBSITE/2)
+                 MCO(1:MAXK,J2) = MC(1:MAXK,J3)
+                 MSO(1:MAXK,J2) = MS(1:MAXK,J3)
                  SUMCO(1:MAXK) = SUMC(1:MAXK)
                  SUMSO(1:MAXK) = SUMS(1:MAXK)
               ENDDO
@@ -302,8 +314,9 @@
               ACCPTC = ACCPTC + 1
               DO J1 = NRBSITE/2+1, NRBSITE
                  J2 = (INDXP-1)*3 + (J1-NRBSITE/2)
-                 MCO(1:MAXK,INDXP) = MC(1:MAXK)
-                 MSO(1:MAXK,INDXP) = MS(1:MAXK)
+                 J3 = J1 - (NRBSITE/2)
+                 MCO(1:MAXK,J2) = MC(1:MAXK,J3)
+                 MSO(1:MAXK,J2) = MS(1:MAXK,J3)
                  SUMCO(1:MAXK) = SUMC(1:MAXK)
                  SUMSO(1:MAXK) = SUMS(1:MAXK)
               ENDDO
@@ -420,39 +433,38 @@
 
       IMPLICIT NONE
 
-      INTEGER          :: NVV, VN(3), NX, NY, NZ, J, K, TOTK, J2, J8, J3
-      DOUBLE PRECISION :: DUMMY, FCTR, PC, PS, MC(MAXK), MS(MAXK), SUMC(MAXK), SUMS(MAXK), WS, DPEKS
-      DOUBLE PRECISION :: VC(3), VS(3), TCOS(0:NC,3), TSIN(0:NC,3)
+      INTEGER          :: NVV, VN(3), NX, NY, NZ, I, J, K, TOTK, J2, J8, J3
+      DOUBLE PRECISION :: DUMMY, FCTR, PC, PS, MC(MAXK,(NRBSITE/2)), MS(MAXK,(NRBSITE/2)), SUMC(MAXK), SUMS(MAXK), WS, DPEKS
+      DOUBLE PRECISION :: VC(3), VS(3), TCOS((NRBSITE/2),0:NC,3), TSIN((NRBSITE/2),0:NC,3)
       DOUBLE PRECISION :: T(3), TT(3), U(3), W(3)
       DOUBLE PRECISION, PARAMETER :: TWOPI = 8.D0*DATAN(1.D0)
 
       DPEKS = 0.D0
+      T(:) = TWOPI/BOXL
+
       DO J = NRBSITE/2+1, NRBSITE
-
-        J8  = NRBSITE*(J2-1) + J
-
+        J8 = NRBSITE*(J2-1) + J
         J3 = (J2-1)*3 + (J - NRBSITE/2)
-       
-        
+        I  = J-3 
 !       Tabulates cos and sin functions
-        T(:) = TWOPI/BOXL
         TT(:) = T(:)*RS(J8,:)
-        TCOS(0,:) = 1.D0
-        TSIN(0,:) = 0.D0
-        TCOS(1,:) = COS(TT(:))
-        TSIN(1,:) = SIN(TT(:))
-        U(:) = 2.D0*TCOS(1,:)
-        TCOS(2,:) = U(:)*TCOS(1,:)
-        TSIN(2,:) = U(:)*TSIN(1,:)
+        TCOS(I,0,:) = 1.D0
+        TSIN(I,0,:) = 0.D0
+        TCOS(I,1,:) = COS(TT(:))
+        TSIN(I,1,:) = SIN(TT(:))
+        U(:) = 2.D0*TCOS(I,1,:)
+        TCOS(I,2,:) = U(:)*TCOS(I,1,:)
+        TSIN(I,2,:) = U(:)*TSIN(I,1,:)
         TT(:) = 1.D0
-        TCOS(2,:) = TCOS(2,:) - TT(:)
+        TCOS(I,2,:) = TCOS(I,2,:) - TT(:)
         DO K = 3, NC
-          W(:) = U(:)*TCOS(K-1,:)
-          TCOS(K,:) = W(:) - TCOS(K-2,:)
-          W(:) = U(:)*TSIN(K-1,:)
-          TSIN(K,:) = W(:) - TSIN(K-2,:)
+          W(:) = U(:)*TCOS(I,K-1,:)
+          TCOS(I,K,:) = W(:) - TCOS(I,K-2,:)
+          W(:) = U(:)*TSIN(I,K-1,:)
+          TSIN(I,K,:) = W(:) - TSIN(I,K-2,:)
         ENDDO
-
+      END DO
+       
         TOTK = 0
         DO NZ = 0, NC
            DO NY =-NC, NC
@@ -461,31 +473,32 @@
                  NVV   = DOT_PRODUCT(VN,VN)
                  IF (NVV == 0 .OR. NVV > NCSQMAX) CYCLE
                  TOTK = TOTK + 1
+                 DO J = NRBSITE/2+1, NRBSITE
+                    J8 = NRBSITE*(J2-1) + J
+                    J3 = (J2-1)*3 + (J - NRBSITE/2)
+                    I  = J-3
 
-                 VC(:) = (/TCOS(ABS(NX),1), TCOS(ABS(NY),2), TCOS(NZ,3)/)
-                 VS(:) = (/TSIN(ABS(NX),1), TSIN(ABS(NY),2), TSIN(NZ,3)/)
+                    VC(:) = (/TCOS(I,ABS(NX),1), TCOS(I,ABS(NY),2), TCOS(I,NZ,3)/)
+                    VS(:) = (/TSIN(I,ABS(NX),1), TSIN(I,ABS(NY),2), TSIN(I,NZ,3)/)
 
-                 IF (NX < 0) VS(1) =-VS(1)
-                 IF (NY < 0) VS(2) =-VS(2)
+                    IF (NX < 0) VS(1) =-VS(1)
+                    IF (NY < 0) VS(2) =-VS(2)
 
-                 PC = VC(1)*VC(2)*VC(3) - VC(1)*VS(2)*VS(3) - VS(1)*VC(2)*VS(3) - VS(1)*VS(2)*VC(3)
-                 PS = VS(1)*VC(2)*VC(3) + VC(1)*VS(2)*VC(3) + VC(1)*VC(2)*VS(3) - VS(1)*VS(2)*VS(3)
+                    PC = VC(1)*VC(2)*VC(3) - VC(1)*VS(2)*VS(3) - VS(1)*VC(2)*VS(3) - VS(1)*VS(2)*VC(3)
+                    PS = VS(1)*VC(2)*VC(3) + VC(1)*VS(2)*VC(3) + VC(1)*VC(2)*VS(3) - VS(1)*VS(2)*VS(3)
 
-                 DUMMY = NX*E(J8,1) + NY*E(J8,2) + NZ*E(J8,3)
-
-                 MC(TOTK) = PC*DUMMY
-                 MS(TOTK) = PS*DUMMY
-
-                 SUMC(TOTK) = SUMCO(TOTK) - MCO(TOTK,J3) + MC(TOTK)
-                 SUMS(TOTK) = SUMSO(TOTK) - MSO(TOTK,J3) + MS(TOTK)
-
+                    DUMMY = NX*E(J8,1) + NY*E(J8,2) + NZ*E(J8,3)
+                    MC(TOTK,I) = PC*DUMMY
+                    MS(TOTK,I) = PS*DUMMY
+                    SUMC(TOTK) = SUMCO(TOTK) - MCO(TOTK,J3) + MC(TOTK,I)
+                    SUMS(TOTK) = SUMSO(TOTK) - MSO(TOTK,J3) + MS(TOTK,I)
+                 ENDDO
                  DPEKS = DPEKS + GU*KFCTR(TOTK)*(SUMC(TOTK)*SUMC(TOTK) + SUMS(TOTK)*SUMS(TOTK) &
                        - SUMCO(TOTK)*SUMCO(TOTK) - SUMSO(TOTK)*SUMSO(TOTK))
               ENDDO
            ENDDO
         ENDDO
 
-      END DO
 
       END SUBROUTINE SNENRG_DIPOLE_FOURIERSPACE
 
@@ -649,7 +662,7 @@
                     J2 = J1 - NRBSITE/2
                     J3 = (J-1)*3 + J2
 
-
+                    VC(:) = (/TCOS(J3,ABS(NX),1), TCOS(J3,ABS(NY),2), TCOS(J3,NZ,3)/)
                     VS(:) = (/TSIN(J3,ABS(NX),1), TSIN(J3,ABS(NY),2), TSIN(J3,NZ,3)/)
 
                     IF (NX < 0) VS(1) =-VS(1)
@@ -689,27 +702,26 @@
 
       DO J = 1, NPART
          DO J1 = NRBSITE/2+1, NRBSITE
+            J2 = J1 - NRBSITE/2
+            J3 = (J-1)*3 + J2
+            J8 = NRBSITE*(J-1) + J1
 
-         J2 = J1 - NRBSITE/2
-         J3 = (J-1)*3 + J2
-
-          J8 = NRBSITE*(J-1) + J1
-          TT(:) = T(:)*RS(J8,:)
-          TCOS(J3,0,:) = 1.D0
-          TSIN(J3,0,:) = 0.D0
-          TCOS(J3,1,:) = COS(TT(:))
-          TSIN(J3,1,:) = SIN(TT(:))
-          U(:) = 2.D0*TCOS(J3,1,:)
-          TCOS(J3,2,:) = U(:)*TCOS(J3,1,:)
-          TSIN(J3,2,:) = U(:)*TSIN(J3,1,:)
-          TT(:) = 1.D0
-          TCOS(J3,2,:) = TCOS(J3,2,:) - TT(:)
-          DO K = 3, NC
-             W(:) = U(:)*TCOS(J3,K-1,:)
-             TCOS(J3,K,:) = W(:) - TCOS(J3,K-2,:)
-             W(:) = U(:)*TSIN(J3,K-1,:)
-             TSIN(J3,K,:) = W(:) - TSIN(J3,K-2,:)
-          ENDDO
+            TT(:) = T(:)*RS(J8,:)
+            TCOS(J3,0,:) = 1.D0
+            TSIN(J3,0,:) = 0.D0
+            TCOS(J3,1,:) = COS(TT(:))
+            TSIN(J3,1,:) = SIN(TT(:))
+            U(:) = 2.D0*TCOS(J3,1,:)
+            TCOS(J3,2,:) = U(:)*TCOS(J3,1,:)
+            TSIN(J3,2,:) = U(:)*TSIN(J3,1,:)
+            TT(:) = 1.D0
+            TCOS(J3,2,:) = TCOS(J3,2,:) - TT(:)
+            DO K = 3, NC
+               W(:) = U(:)*TCOS(J3,K-1,:)
+               TCOS(J3,K,:) = W(:) - TCOS(J3,K-2,:)
+               W(:) = U(:)*TSIN(J3,K-1,:)
+               TSIN(J3,K,:) = W(:) - TSIN(J3,K-2,:)
+            ENDDO
          ENDDO
       ENDDO
 
@@ -886,15 +898,15 @@
 
       IMPLICIT NONE
 
-      RBSITE(1,:) = (/ 0.4248402040D0, 0.2689645261D0,-0.1563298793D0/)
-      RBSITE(2,:) = (/-0.0070030878D0,-0.5252875068D0,-0.0359741025D0/)
-      RBSITE(3,:) = (/-0.4178371162D0, 0.2563229807D0, 0.1923039818D0/)
-      RBSITE(4,:) = (/ 0.2503095289D0, 0.0857240047D0,-0.0974915009D0/)
-      RBSITE(5,:) = (/-0.0625001156D0,-0.2749011695D0, 0.0055802232D0/)
-      RBSITE(6,:) = (/-0.1878093866D0, 0.1891771768D0, 0.0919113296D0/)
-      RBUV(4,:)   = (/ 0.1302206659D0,-0.9833432000D0,-0.1268019289D0/)
-      RBUV(5,:)   = (/-0.8573724478D0, 0.3457675894D0, 0.3812574718D0/)
-      RBUV(6,:)   = (/ 0.7271517686D0, 0.6375756571D0,-0.2544554715D0/)
+      RBSITE(1,:) = (/ 0.4090356896D0, 0.2793441557D0,-0.2523726902D0/)
+      RBSITE(2,:) = (/-0.5073604962D0,-0.0150451861D0,-0.2267031004D0/)
+      RBSITE(3,:) = (/ 0.0983248066D0,-0.2641909696D0, 0.4790757907D0/)
+      RBSITE(4,:) = (/ 0.3677683124D0, 0.1148374307D0,-0.0049165507D0/)
+      RBSITE(5,:) = (/-0.2377758408D0, 0.1028537708D0,-0.2852176243D0/)
+      RBSITE(6,:) = (/-0.1299924727D0,-0.2176912009D0, 0.2901341704D0/)
+      RBUV(4,:)   = (/-0.1375579241D0,-0.5483557500D0, 0.8248537985D0/)
+      RBUV(5,:)   = (/ 0.8986155182D0, 0.3929965230D0,-0.1950484128D0/)
+      RBUV(6,:)   = (/-0.7610575978D0, 0.1553591191D0,-0.6298054007D0/)
 
       END SUBROUTINE DEFMULTSHIFTDP
 !     ==============================================================================================
